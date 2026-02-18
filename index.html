@@ -1,0 +1,1192 @@
+<!doctype html>
+<html lang="fr" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Générateur de Visuel Citoyen</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&amp;display=swap" rel="stylesheet">
+  <style>
+    body {
+      box-sizing: border-box;
+      font-family: 'Montserrat', sans-serif;
+    }
+    
+    .canvas-container {
+      position: relative;
+      width: 100%;
+      max-width: 600px;
+      aspect-ratio: 1/1;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      overflow: hidden;
+      border-radius: 12px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+    
+    .background-layer {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      transition: all 0.5s ease;
+    }
+    
+    .overlay-image {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 50;
+    }
+    
+    .overlay-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      pointer-events: none;
+    }
+    
+    .user-text-overlay {
+      position: absolute;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      color: #FFFFFF;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+      z-index: 10;
+      transition: none;
+      width: auto;
+      max-width: 500px;
+      cursor: move;
+      user-select: none;
+      touch-action: none;
+    }
+    
+    .user-text-overlay.with-bg {
+      background: rgba(10, 10, 10, 0.75);
+      padding: 12px 20px;
+      border-radius: 12px;
+      backdrop-filter: blur(8px);
+    }
+    
+    .user-name {
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 4px;
+    }
+    
+    .user-profession {
+      font-size: 16px;
+      font-weight: 400;
+      opacity: 0.95;
+    }
+    
+    .upload-zone {
+      border: 2px dashed rgba(255, 255, 255, 0.3);
+      border-radius: 12px;
+      padding: 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .upload-zone:hover {
+      border-color: rgba(255, 255, 255, 0.6);
+      background: rgba(255, 255, 255, 0.1);
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+    }
+    
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 500;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+    
+    .input-field {
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 14px;
+      transition: all 0.3s ease;
+    }
+    
+    .input-field::placeholder {
+      color: rgba(255, 255, 255, 0.5);
+    }
+    
+    .input-field:focus {
+      outline: none;
+      border-color: #667eea;
+      background: rgba(255, 255, 255, 0.15);
+    }
+    
+    .user-text-overlay.dragging {
+      cursor: grabbing;
+      opacity: 0.9;
+    }
+    
+    .text-drag-hint {
+      position: absolute;
+      top: -30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(102, 126, 234, 0.9);
+      color: white;
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    
+    .user-text-overlay:hover .text-drag-hint {
+      opacity: 1;
+    }
+    
+    @media (max-width: 640px) {
+      .user-text-overlay {
+        top: 40px;
+        max-width: calc(100% - 40px);
+      }
+      
+      .user-text-overlay.with-bg {
+        padding: 8px 12px;
+      }
+      
+      .user-name {
+        font-size: 18px;
+      }
+      
+      .user-profession {
+        font-size: 14px;
+      }
+      
+      .text-drag-hint {
+        display: none;
+      }
+    }
+    
+    .loading-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .crop-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.95);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+    
+    .crop-modal.active {
+      display: flex;
+    }
+    
+    .crop-container {
+      position: relative;
+      max-width: 90vw;
+      max-height: 85vh;
+      background: #1a1a2e;
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .crop-image-wrapper {
+      position: relative;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      background: #000;
+    }
+    
+    .crop-image {
+      max-width: 100%;
+      max-height: 65vh;
+      display: block;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+    
+    .crop-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    
+    .crop-box {
+      position: absolute;
+      border: 3px solid #667eea;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+      cursor: move;
+      pointer-events: all;
+    }
+    
+    .crop-handle {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      background: #667eea;
+      border: 3px solid white;
+      border-radius: 50%;
+      pointer-events: all;
+      touch-action: none;
+    }
+    
+    .crop-handle.nw { top: -15px; left: -15px; cursor: nw-resize; }
+    .crop-handle.ne { top: -15px; right: -15px; cursor: ne-resize; }
+    .crop-handle.sw { bottom: -15px; left: -15px; cursor: sw-resize; }
+    .crop-handle.se { bottom: -15px; right: -15px; cursor: se-resize; }
+    
+    .crop-controls {
+      padding: 20px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+    }
+    
+    .crop-controls p {
+      color: white;
+      margin-bottom: 15px;
+      font-size: 14px;
+    }
+    
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #10b981;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 500;
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s ease;
+      z-index: 100;
+    }
+    
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    
+    .drag-instruction {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 16px 28px;
+      border-radius: 12px;
+      font-weight: 500;
+      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+      opacity: 0;
+      transition: all 0.4s ease;
+      z-index: 100;
+      text-align: center;
+      max-width: 90%;
+    }
+    
+    .drag-instruction.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+    
+    .drag-instruction svg {
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+ </head>
+ <body class="h-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white overflow-auto">
+  <div class="min-h-full w-full p-4 md:p-8">
+   <div class="max-w-5xl mx-auto"><!-- Header -->
+    <header class="text-center mb-8">
+     <h1 id="main-title" class="text-3xl md:text-4xl font-bold mb-2 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">Créez Votre Visuel Citoyen</h1>
+     <p id="help-text" class="text-white/70 text-sm md:text-base">Importez une photo depuis votre téléphone, recadrez si besoin, puis entrez votre nom et profession.</p>
+    </header><!-- Main Canvas Preview -->
+    <div class="mb-8">
+     <div class="canvas-container mx-auto" id="canvas-container"><!-- Background Layer (User uploaded image) -->
+      <div class="background-layer" id="background-layer" style="z-index: 1;">
+       <div class="flex items-center justify-center h-full text-white/40">
+        <div class="text-center">
+         <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+         </svg>
+         <p class="text-sm">Votre photo apparaîtra ici</p>
+        </div>
+       </div>
+      </div><!-- User Text Overlay -->
+      <div class="user-text-overlay" id="user-text-overlay" style="display: none; z-index: 40;">
+       <div class="text-drag-hint">
+        ✋ Déplacez-moi
+       </div>
+       <div class="user-name" id="display-name"></div>
+       <div class="user-profession" id="display-profession"></div>
+      </div><!-- Overlay Image (Fixed Foreground) -->
+      <div class="overlay-image" id="overlay-image" style="z-index: 50;"><img src="imgpro.png" alt="Cadre professionnel" loading="eager" id="frame-image" style="display: block; width: 100%; height: 100%; object-fit: contain;">
+      </div>
+     </div>
+    </div><!-- Controls Panel -->
+    <div class="bg-white/5 backdrop-blur-lg rounded-2xl p-6 mb-6">
+     <div class="grid md:grid-cols-2 gap-6"><!-- Left Column: Image Upload -->
+      <div>
+       <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+        <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg> Importer votre photo</h3>
+       <div class="upload-zone mb-4" id="upload-zone"><input type="file" id="file-input" accept="image/*" class="hidden">
+        <svg class="w-12 h-12 mx-auto mb-3 text-white/50" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+        </svg>
+        <p class="text-white/70 mb-2">Cliquez ou glissez une photo</p>
+        <p class="text-white/50 text-sm">Formats acceptés : JPG, PNG, WebP</p>
+       </div>
+       <div id="image-controls" class="hidden">
+        <div class="flex gap-3"><button class="btn-secondary flex-1" id="btn-recrop">
+          <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+          </svg> Recadrer </button> <button class="btn-secondary flex-1" id="btn-reset-image">
+          <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg> Réinitialiser </button>
+        </div>
+       </div>
+      </div><!-- Right Column: Text Input -->
+      <div>
+       <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+        <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg> Vos informations</h3>
+       <div class="space-y-4">
+        <div><label for="user-name" class="block text-sm text-white/70 mb-2">Votre nom</label> <input type="text" id="user-name" class="input-field" placeholder="Ex: Marie Dupont" maxlength="40">
+        </div>
+        <div><label for="user-profession" class="block text-sm text-white/70 mb-2">Votre profession</label> <input type="text" id="user-profession" class="input-field" placeholder="Ex: Ingénieure en environnement" maxlength="50">
+        </div>
+        <div class="flex items-center gap-3"><input type="checkbox" id="show-bg" class="w-4 h-4 accent-purple-500 rounded" checked> <label for="show-bg" class="text-sm text-white/70">Ajouter un fond au texte pour meilleure lisibilité</label>
+        </div>
+       </div>
+      </div>
+     </div>
+    </div><!-- Generate and Download -->
+    <div class="bg-white/5 backdrop-blur-lg rounded-2xl p-6">
+     <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div>
+       <h3 class="text-lg font-semibold mb-1">Générer le visuel final</h3>
+       <p class="text-sm text-white/60">Exportez votre création en haute résolution</p>
+      </div><button class="btn-primary" id="btn-download">
+       <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+       </svg><span id="btn-download-text">Télécharger</span> </button>
+     </div>
+    </div>
+   </div>
+  </div><!-- Crop Modal -->
+  <div class="crop-modal" id="crop-modal">
+   <div class="crop-container">
+    <div class="crop-image-wrapper" id="crop-wrapper"><img src="" alt="Image à recadrer" class="crop-image" id="crop-image">
+     <div class="crop-overlay" id="crop-overlay">
+      <div class="crop-box" id="crop-box">
+       <div class="crop-handle nw" data-handle="nw"></div>
+       <div class="crop-handle ne" data-handle="ne"></div>
+       <div class="crop-handle sw" data-handle="sw"></div>
+       <div class="crop-handle se" data-handle="se"></div>
+      </div>
+     </div>
+    </div>
+    <div class="crop-controls">
+     <p>Déplacez et ajustez la zone de recadrage pour obtenir le meilleur cadrage (ratio 1:1)</p>
+     <div class="flex gap-3 justify-center"><button class="btn-secondary" id="btn-cancel-crop">Annuler</button> <button class="btn-primary" id="btn-validate-crop">Valider le recadrage</button>
+     </div>
+    </div>
+   </div>
+  </div><!-- Toast Notification -->
+  <div class="toast" id="toast">
+   Visuel téléchargé avec succès !
+  </div><!-- Drag Instruction Notification -->
+  <div class="drag-instruction" id="drag-instruction">
+   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
+   </svg> Vous pouvez maintenant déplacer le cadre texte où vous voulez !
+  </div>
+  <script>
+    // Configuration
+    const defaultConfig = {
+      main_title: "Créez Votre Visuel Citoyen",
+      help_text: "Importez une photo depuis votre téléphone, recadrez si besoin, puis entrez votre nom et profession.",
+      primary_color: "#667eea",
+      secondary_color: "#764ba2",
+      background_color: "#1a1a2e",
+      text_color: "#ffffff",
+      accent_color: "#f093fb"
+    };
+    
+    let config = { ...defaultConfig };
+    
+    // State
+    let originalImage = null;
+    let croppedImage = null;
+    let cropData = null;
+    
+    // Text overlay drag state
+    let isDraggingText = false;
+    let textStartX = 0;
+    let textStartY = 0;
+    let textOffsetX = 0;
+    let textOffsetY = 0;
+    let currentTextX = null;
+    let currentTextY = null;
+    
+    // Crop state
+    let cropBox = null;
+    let cropImage = null;
+    let cropOverlay = null;
+    let isDraggingBox = false;
+    let isResizing = false;
+    let resizeHandle = null;
+    let startX = 0;
+    let startY = 0;
+    let startBoxX = 0;
+    let startBoxY = 0;
+    let startBoxW = 0;
+    let startBoxH = 0;
+    
+    // DOM Elements
+    const fileInput = document.getElementById('file-input');
+    const uploadZone = document.getElementById('upload-zone');
+    const backgroundLayer = document.getElementById('background-layer');
+    const userTextOverlay = document.getElementById('user-text-overlay');
+    const displayName = document.getElementById('display-name');
+    const displayProfession = document.getElementById('display-profession');
+    const userNameInput = document.getElementById('user-name');
+    const userProfessionInput = document.getElementById('user-profession');
+    const showBgCheckbox = document.getElementById('show-bg');
+    const imageControls = document.getElementById('image-controls');
+    const btnRecrop = document.getElementById('btn-recrop');
+    const btnResetImage = document.getElementById('btn-reset-image');
+    const btnDownload = document.getElementById('btn-download');
+    const toast = document.getElementById('toast');
+    const dragInstruction = document.getElementById('drag-instruction');
+    const mainTitle = document.getElementById('main-title');
+    const helpText = document.getElementById('help-text');
+    
+    let hasShownDragInstruction = false;
+    
+    // Crop modal elements
+    const cropModal = document.getElementById('crop-modal');
+    const cropWrapper = document.getElementById('crop-wrapper');
+    const btnCancelCrop = document.getElementById('btn-cancel-crop');
+    const btnValidateCrop = document.getElementById('btn-validate-crop');
+    
+    // Initialize Element SDK
+    if (window.elementSdk) {
+      window.elementSdk.init({
+        defaultConfig,
+        onConfigChange: async (newConfig) => {
+          config = { ...config, ...newConfig };
+          mainTitle.textContent = config.main_title || defaultConfig.main_title;
+          helpText.textContent = config.help_text || defaultConfig.help_text;
+        },
+        mapToCapabilities: (config) => ({
+          recolorables: [
+            {
+              get: () => config.primary_color || defaultConfig.primary_color,
+              set: (value) => {
+                config.primary_color = value;
+                window.elementSdk.setConfig({ primary_color: value });
+              }
+            },
+            {
+              get: () => config.background_color || defaultConfig.background_color,
+              set: (value) => {
+                config.background_color = value;
+                window.elementSdk.setConfig({ background_color: value });
+              }
+            }
+          ],
+          borderables: [],
+          fontEditable: undefined,
+          fontSizeable: undefined
+        }),
+        mapToEditPanelValues: (config) => new Map([
+          ["main_title", config.main_title || defaultConfig.main_title],
+          ["help_text", config.help_text || defaultConfig.help_text]
+        ])
+      });
+    }
+    
+    // File Upload Handlers
+    uploadZone.addEventListener('click', () => fileInput.click());
+    
+    uploadZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadZone.classList.add('border-purple-400');
+    });
+    
+    uploadZone.addEventListener('dragleave', () => {
+      uploadZone.classList.remove('border-purple-400');
+    });
+    
+    uploadZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadZone.classList.remove('border-purple-400');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) {
+        handleImageUpload(file);
+      }
+    });
+    
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        handleImageUpload(file);
+      }
+    });
+    
+    function handleImageUpload(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        originalImage = new Image();
+        originalImage.onload = () => {
+          openCropModal(e.target.result);
+        };
+        originalImage.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+    
+    function openCropModal(imageSrc) {
+      cropModal.classList.add('active');
+      cropImage = document.getElementById('crop-image');
+      cropBox = document.getElementById('crop-box');
+      cropOverlay = document.getElementById('crop-overlay');
+      
+      cropImage.src = imageSrc;
+      cropImage.onload = () => {
+        initializeCropBox();
+      };
+    }
+    
+    function initializeCropBox() {
+      const wrapper = cropWrapper.getBoundingClientRect();
+      const img = cropImage.getBoundingClientRect();
+      
+      // Calculer la taille du crop box (carré)
+      const size = Math.min(img.width, img.height) * 0.8;
+      
+      // Centrer le crop box
+      const left = (img.left - wrapper.left) + (img.width - size) / 2;
+      const top = (img.top - wrapper.top) + (img.height - size) / 2;
+      
+      cropBox.style.left = left + 'px';
+      cropBox.style.top = top + 'px';
+      cropBox.style.width = size + 'px';
+      cropBox.style.height = size + 'px';
+      
+      setupCropHandlers();
+    }
+    
+    function setupCropHandlers() {
+      // Drag crop box - Mouse
+      cropBox.addEventListener('mousedown', (e) => {
+        if (e.target.classList.contains('crop-handle')) return;
+        isDraggingBox = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = cropBox.getBoundingClientRect();
+        startBoxX = rect.left - cropWrapper.getBoundingClientRect().left;
+        startBoxY = rect.top - cropWrapper.getBoundingClientRect().top;
+      });
+      
+      // Drag crop box - Touch
+      cropBox.addEventListener('touchstart', (e) => {
+        if (e.target.classList.contains('crop-handle')) return;
+        e.preventDefault();
+        isDraggingBox = true;
+        const touch = e.touches[0];
+        startX = touch.clientX;
+        startY = touch.clientY;
+        const rect = cropBox.getBoundingClientRect();
+        startBoxX = rect.left - cropWrapper.getBoundingClientRect().left;
+        startBoxY = rect.top - cropWrapper.getBoundingClientRect().top;
+      });
+      
+      // Resize handles - Mouse
+      const handles = cropBox.querySelectorAll('.crop-handle');
+      handles.forEach(handle => {
+        handle.addEventListener('mousedown', (e) => {
+          e.stopPropagation();
+          isResizing = true;
+          resizeHandle = handle.dataset.handle;
+          startX = e.clientX;
+          startY = e.clientY;
+          const rect = cropBox.getBoundingClientRect();
+          const wrapperRect = cropWrapper.getBoundingClientRect();
+          startBoxX = rect.left - wrapperRect.left;
+          startBoxY = rect.top - wrapperRect.top;
+          startBoxW = rect.width;
+          startBoxH = rect.height;
+        });
+        
+        // Resize handles - Touch
+        handle.addEventListener('touchstart', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          isResizing = true;
+          resizeHandle = handle.dataset.handle;
+          const touch = e.touches[0];
+          startX = touch.clientX;
+          startY = touch.clientY;
+          const rect = cropBox.getBoundingClientRect();
+          const wrapperRect = cropWrapper.getBoundingClientRect();
+          startBoxX = rect.left - wrapperRect.left;
+          startBoxY = rect.top - wrapperRect.top;
+          startBoxW = rect.width;
+          startBoxH = rect.height;
+        });
+      });
+      
+      document.addEventListener('mousemove', handleCropMove);
+      document.addEventListener('mouseup', handleCropEnd);
+      document.addEventListener('touchmove', handleCropMove);
+      document.addEventListener('touchend', handleCropEnd);
+    }
+    
+    function handleCropMove(e) {
+      if (isDraggingBox) {
+        const clientX = e.clientX !== undefined ? e.clientX : e.touches[0].clientX;
+        const clientY = e.clientY !== undefined ? e.clientY : e.touches[0].clientY;
+        
+        const deltaX = clientX - startX;
+        const deltaY = clientY - startY;
+        
+        const wrapperRect = cropWrapper.getBoundingClientRect();
+        const imgRect = cropImage.getBoundingClientRect();
+        const cropRect = cropBox.getBoundingClientRect();
+        
+        let newX = startBoxX + deltaX;
+        let newY = startBoxY + deltaY;
+        
+        // Contraintes
+        const minX = imgRect.left - wrapperRect.left;
+        const minY = imgRect.top - wrapperRect.top;
+        const maxX = imgRect.right - wrapperRect.left - cropRect.width;
+        const maxY = imgRect.bottom - wrapperRect.top - cropRect.height;
+        
+        newX = Math.max(minX, Math.min(maxX, newX));
+        newY = Math.max(minY, Math.min(maxY, newY));
+        
+        cropBox.style.left = newX + 'px';
+        cropBox.style.top = newY + 'px';
+      }
+      
+      if (isResizing) {
+        const clientX = e.clientX !== undefined ? e.clientX : e.touches[0].clientX;
+        const clientY = e.clientY !== undefined ? e.clientY : e.touches[0].clientY;
+        
+        const deltaX = clientX - startX;
+        const deltaY = clientY - startY;
+        
+        const wrapperRect = cropWrapper.getBoundingClientRect();
+        const imgRect = cropImage.getBoundingClientRect();
+        
+        let newX = startBoxX;
+        let newY = startBoxY;
+        let newW = startBoxW;
+        let newH = startBoxH;
+        
+        // Maintenir le ratio 1:1
+        const delta = Math.max(deltaX, deltaY);
+        
+        switch (resizeHandle) {
+          case 'se':
+            newW = startBoxW + delta;
+            newH = newW;
+            break;
+          case 'sw':
+            newW = startBoxW - deltaX;
+            newH = newW;
+            newX = startBoxX + startBoxW - newW;
+            break;
+          case 'ne':
+            newW = startBoxW + deltaX;
+            newH = newW;
+            newY = startBoxY + startBoxH - newH;
+            break;
+          case 'nw':
+            newW = startBoxW - delta;
+            newH = newW;
+            newX = startBoxX + delta;
+            newY = startBoxY + delta;
+            break;
+        }
+        
+        // Contraintes minimales et maximales
+        const minSize = 50;
+        const maxSize = Math.min(imgRect.width, imgRect.height);
+        newW = Math.max(minSize, Math.min(maxSize, newW));
+        newH = newW;
+        
+        // Vérifier les limites de l'image
+        const minX = imgRect.left - wrapperRect.left;
+        const minY = imgRect.top - wrapperRect.top;
+        const maxX = imgRect.right - wrapperRect.left - newW;
+        const maxY = imgRect.bottom - wrapperRect.top - newH;
+        
+        newX = Math.max(minX, Math.min(maxX, newX));
+        newY = Math.max(minY, Math.min(maxY, newY));
+        
+        cropBox.style.left = newX + 'px';
+        cropBox.style.top = newY + 'px';
+        cropBox.style.width = newW + 'px';
+        cropBox.style.height = newH + 'px';
+      }
+    }
+    
+    function handleCropEnd() {
+      isDraggingBox = false;
+      isResizing = false;
+      resizeHandle = null;
+    }
+    
+    btnCancelCrop.addEventListener('click', () => {
+      cropModal.classList.remove('active');
+      fileInput.value = '';
+    });
+    
+    btnValidateCrop.addEventListener('click', () => {
+      applyCrop();
+    });
+    
+    function applyCrop() {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // Dimensions du crop box en pixels
+      const wrapperRect = cropWrapper.getBoundingClientRect();
+      const imgRect = cropImage.getBoundingClientRect();
+      const cropRect = cropBox.getBoundingClientRect();
+      
+      // Calcul des coordonnées relatives à l'image affichée
+      const relX = cropRect.left - imgRect.left;
+      const relY = cropRect.top - imgRect.top;
+      const relW = cropRect.width;
+      const relH = cropRect.height;
+      
+      // Calcul du ratio entre l'image affichée et l'image originale
+      const scaleX = originalImage.naturalWidth / imgRect.width;
+      const scaleY = originalImage.naturalHeight / imgRect.height;
+      
+      // Coordonnées dans l'image originale
+      const sourceX = relX * scaleX;
+      const sourceY = relY * scaleY;
+      const sourceW = relW * scaleX;
+      const sourceH = relH * scaleY;
+      
+      // Créer l'image recadrée en carré
+      const size = 1200;
+      canvas.width = size;
+      canvas.height = size;
+      
+      ctx.drawImage(
+        originalImage,
+        sourceX, sourceY, sourceW, sourceH,
+        0, 0, size, size
+      );
+      
+      // Convertir en image
+      canvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        croppedImage = new Image();
+        croppedImage.onload = () => {
+          updateBackground();
+          imageControls.classList.remove('hidden');
+          uploadZone.innerHTML = `
+            <div class="flex items-center gap-3">
+              <svg class="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
+              <div class="text-left">
+                <p class="text-white font-medium">Photo recadrée</p>
+                <p class="text-white/50 text-sm">Cliquez pour changer</p>
+              </div>
+            </div>
+          `;
+          cropModal.classList.remove('active');
+        };
+        croppedImage.src = url;
+      }, 'image/png');
+    }
+    
+    function updateBackground() {
+      if (!croppedImage) return;
+      
+      backgroundLayer.innerHTML = '';
+      backgroundLayer.style.backgroundImage = `url(${croppedImage.src})`;
+      backgroundLayer.style.backgroundSize = 'cover';
+      backgroundLayer.style.backgroundPosition = 'center';
+    }
+    
+    btnRecrop.addEventListener('click', () => {
+      if (originalImage) {
+        openCropModal(originalImage.src);
+      }
+    });
+    
+    // Text Input Handlers
+    userNameInput.addEventListener('input', updateTextOverlay);
+    userProfessionInput.addEventListener('input', updateTextOverlay);
+    showBgCheckbox.addEventListener('change', updateTextOverlay);
+    
+    function updateTextOverlay() {
+      const name = userNameInput.value.trim();
+      const profession = userProfessionInput.value.trim();
+      
+      if (name || profession) {
+        const wasHidden = userTextOverlay.style.display === 'none';
+        userTextOverlay.style.display = 'block';
+        displayName.textContent = name;
+        displayProfession.textContent = profession;
+        
+        if (showBgCheckbox.checked) {
+          userTextOverlay.classList.add('with-bg');
+        } else {
+          userTextOverlay.classList.remove('with-bg');
+        }
+        
+        // Appliquer la position sauvegardée si elle existe
+        if (currentTextX !== null && currentTextY !== null) {
+          userTextOverlay.style.left = currentTextX + 'px';
+          userTextOverlay.style.top = currentTextY + 'px';
+          userTextOverlay.style.bottom = 'auto';
+          userTextOverlay.style.transform = 'none';
+        }
+        
+        // Afficher la notification de déplacement si c'est la première fois
+        if (wasHidden && !hasShownDragInstruction && name && profession) {
+          showDragInstruction();
+          hasShownDragInstruction = true;
+        }
+      } else {
+        userTextOverlay.style.display = 'none';
+      }
+    }
+    
+    // Text Overlay Drag Handlers
+    userTextOverlay.addEventListener('mousedown', startDragText);
+    userTextOverlay.addEventListener('touchstart', startDragText);
+    
+    function startDragText(e) {
+      e.preventDefault();
+      isDraggingText = true;
+      userTextOverlay.classList.add('dragging');
+      
+      const clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+      const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+      
+      const rect = userTextOverlay.getBoundingClientRect();
+      const containerRect = document.getElementById('canvas-container').getBoundingClientRect();
+      
+      textOffsetX = clientX - rect.left;
+      textOffsetY = clientY - rect.top;
+      textStartX = clientX;
+      textStartY = clientY;
+    }
+    
+    document.addEventListener('mousemove', dragText);
+    document.addEventListener('touchmove', dragText);
+    
+    function dragText(e) {
+      if (!isDraggingText) return;
+      
+      const clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+      const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+      
+      const containerRect = document.getElementById('canvas-container').getBoundingClientRect();
+      const textRect = userTextOverlay.getBoundingClientRect();
+      
+      // Calculer la nouvelle position
+      let newX = clientX - containerRect.left - textOffsetX;
+      let newY = clientY - containerRect.top - textOffsetY;
+      
+      // Contraintes pour garder le texte dans le canvas
+      const minX = 0;
+      const minY = 0;
+      const maxX = containerRect.width - textRect.width;
+      const maxY = containerRect.height - textRect.height;
+      
+      newX = Math.max(minX, Math.min(maxX, newX));
+      newY = Math.max(minY, Math.min(maxY, newY));
+      
+      // Appliquer la position
+      userTextOverlay.style.left = newX + 'px';
+      userTextOverlay.style.top = newY + 'px';
+      userTextOverlay.style.bottom = 'auto';
+      userTextOverlay.style.transform = 'none';
+      
+      // Sauvegarder la position
+      currentTextX = newX;
+      currentTextY = newY;
+    }
+    
+    document.addEventListener('mouseup', endDragText);
+    document.addEventListener('touchend', endDragText);
+    
+    function endDragText() {
+      if (isDraggingText) {
+        isDraggingText = false;
+        userTextOverlay.classList.remove('dragging');
+      }
+    }
+    
+    // Reset Button
+    btnResetImage.addEventListener('click', () => {
+      originalImage = null;
+      croppedImage = null;
+      fileInput.value = '';
+      
+      backgroundLayer.style.backgroundImage = 'none';
+      backgroundLayer.innerHTML = `
+        <div class="flex items-center justify-center h-full text-white/40">
+          <div class="text-center">
+            <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <p class="text-sm">Votre photo apparaîtra ici</p>
+          </div>
+        </div>
+      `;
+      
+      uploadZone.innerHTML = `
+        <svg class="w-12 h-12 mx-auto mb-3 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+        </svg>
+        <p class="text-white/70 mb-2">Cliquez ou glissez une photo</p>
+        <p class="text-white/50 text-sm">Formats acceptés : JPG, PNG, WebP</p>
+      `;
+      
+      imageControls.classList.add('hidden');
+    });
+    
+    // Fonction pour dessiner le cadre PNG directement sur le canvas
+    function drawFrameOnCanvas(ctx, size) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0, size, size);
+          resolve();
+        };
+        img.onerror = (error) => {
+          console.error('❌ Erreur chargement PNG:', error);
+          resolve(); // On continue sans le cadre
+        };
+        img.src = 'imgpro.png';
+      });
+    }
+    
+    // Export with proper PNG overlay
+    btnDownload.addEventListener('click', async () => {
+      const btnText = document.getElementById('btn-download-text');
+      const originalText = btnText.textContent;
+      btnDownload.innerHTML = '<span class="loading-spinner"></span> Génération...';
+      btnDownload.disabled = true;
+      
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const size = 1200;
+        canvas.width = size;
+        canvas.height = size;
+        
+        // Fond
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(0, 0, size, size);
+        
+        // Dessiner l'image recadrée
+        if (croppedImage) {
+          ctx.drawImage(croppedImage, 0, 0, size, size);
+        }
+        
+        // Dessiner le texte
+        const name = userNameInput.value.trim();
+        const profession = userProfessionInput.value.trim();
+        
+        if (name || profession) {
+          ctx.font = 'bold 48px Montserrat, sans-serif';
+          const nameWidth = name ? ctx.measureText(name).width : 0;
+          ctx.font = '32px Montserrat, sans-serif';
+          const profWidth = profession ? ctx.measureText(profession).width : 0;
+          const contentWidth = Math.max(nameWidth, profWidth);
+          const paddingLeft = 40;
+          const paddingRight = 40;
+          const paddingV = 30;
+          const textHeight = 100;
+          const rectW = contentWidth + paddingLeft + paddingRight;
+          const rectH = textHeight + paddingV * 2;
+          
+          // Utiliser la position personnalisée si elle existe
+          let rectX, rectY, textX, textY;
+          
+          if (currentTextX !== null && currentTextY !== null) {
+            // Convertir la position relative en pixels pour le canvas 1200x1200
+            const containerRect = document.getElementById('canvas-container').getBoundingClientRect();
+            const scale = size / containerRect.width;
+            
+            rectX = currentTextX * scale;
+            rectY = currentTextY * scale;
+            textX = rectX + rectW / 2;
+            textY = rectY + rectH / 2 + 10;
+          } else {
+            // Position par défaut (centrée en haut)
+            rectX = (size - rectW) / 2;
+            rectY = 80;
+            textX = size / 2;
+            textY = 80 + rectH / 2 + 10;
+          }
+          
+          if (showBgCheckbox.checked) {
+            ctx.fillStyle = 'rgba(10, 10, 10, 0.75)';
+            const radius = 12;
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(rectX + radius, rectY);
+            ctx.arcTo(rectX + rectW, rectY, rectX + rectW, rectY + rectH, radius);
+            ctx.arcTo(rectX + rectW, rectY + rectH, rectX, rectY + rectH, radius);
+            ctx.arcTo(rectX, rectY + rectH, rectX, rectY, radius);
+            ctx.arcTo(rectX, rectY, rectX + rectW, rectY, radius);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+          }
+          
+          ctx.fillStyle = '#FFFFFF';
+          ctx.textAlign = 'center';
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+          ctx.shadowBlur = 8;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 2;
+          
+          if (name) {
+            ctx.font = 'bold 48px Montserrat, sans-serif';
+            ctx.fillText(name, textX, textY - 10);
+          }
+          
+          if (profession) {
+            ctx.font = '32px Montserrat, sans-serif';
+            ctx.fillText(profession, textX, textY + 40);
+          }
+        }
+        
+        // Dessiner le cadre PNG
+        await drawFrameOnCanvas(ctx, size);
+        
+        // Convertir et télécharger
+        canvas.toBlob((blob) => {
+          const url = URL.createObjectURL(blob);
+          const userName = userNameInput.value.trim().replace(/[^a-z0-9]/gi, '-') || 'participant';
+          const fileName = `visuel-citoyen-${userName}.png`;
+          
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          
+          showToast();
+        }, 'image/png', 1.0);
+        
+      } catch (error) {
+        console.error('❌ Erreur:', error);
+        toast.textContent = '❌ Erreur : ' + error.message;
+        toast.style.background = '#ef4444';
+        showToast();
+        setTimeout(() => {
+          toast.textContent = 'Visuel téléchargé avec succès !';
+          toast.style.background = '#10b981';
+        }, 3000);
+      } finally {
+        btnDownload.innerHTML = `<svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg><span id="btn-download-text">${originalText}</span>`;
+        btnDownload.disabled = false;
+      }
+    });
+    
+    function showToast() {
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3000);
+    }
+    
+    function showDragInstruction() {
+      dragInstruction.classList.add('show');
+      setTimeout(() => {
+        dragInstruction.classList.remove('show');
+      }, 4500);
+    }
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9c17b975f792b889',t:'MTc2OTAwODA4MC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
